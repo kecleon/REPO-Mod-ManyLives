@@ -34,11 +34,5 @@
       <Reference Include="UnityEngine.CoreModule">
         <HintPath>E:\Steam\steamapps\common\REPO\REPO_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
       </Reference>
-      <Reference Include="PhotonRealtime">
-        <HintPath>E:\Steam\steamapps\common\REPO\REPO_Data\Managed\PhotonRealtime.dll</HintPath>
-      </Reference>
-      <Reference Include="PhotonUnityNetworking">
-        <HintPath>E:\Steam\steamapps\common\REPO\REPO_Data\Managed\PhotonUnityNetworking.dll</HintPath>
-      </Reference>
     </ItemGroup>
 </Project>

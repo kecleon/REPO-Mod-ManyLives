@@ -2,7 +2,6 @@
 using BepInEx.Logging;
 using HarmonyLib;
 using UnityEngine;
-using Photon.Pun;
 
 namespace ManyLives;
 
@@ -42,10 +41,6 @@ public static class PlayerAvatar_Update_Patch
             var traverse = Traverse.Create(playerHealth);
             var healthSet = traverse.Field("healthSet").GetValue<bool>();
             if (!healthSet) return;
-
-            // Check if this is our local player
-            var photonView = __instance.GetComponent<PhotonView>();
-            if (photonView == null || !photonView.IsMine) return;
             
             // Set health based on number of deaths
             float healthPercent = Plugin.TotalDeaths == 1 ? 0.5f : 0.25f;
@@ -53,13 +48,14 @@ public static class PlayerAvatar_Update_Patch
             var maxHealth = traverse.Field("maxHealth").GetValue<int>();
             var targetHealth = Mathf.RoundToInt(maxHealth * healthPercent);
             
-            Plugin.Log.LogInfo($"Setting local player health - Current: {currentHealth}, Max: {maxHealth}, Target: {targetHealth}");
+            Plugin.Log.LogInfo($"Setting health - Current: {currentHealth}, Max: {maxHealth}, Target: {targetHealth}");
             
             // First set health directly
             traverse.Field("health").SetValue(targetHealth);
+            Plugin.Log.LogInfo($"Set health directly to {targetHealth}");
             
             // Then use Heal to handle multiplayer sync
-            playerHealth.Heal(0, true); // Set to true to force network sync
+            playerHealth.Heal(0, false);
             
             Plugin.Log.LogInfo($"Final health: {traverse.Field("health").GetValue<int>()}");
             Plugin.hasSetHealth = true;
@@ -87,21 +83,6 @@ public static class RunManager_ChangeLevel_Patch
     }
 }
 
-[HarmonyPatch(typeof(RunManager), "UpdateLevel")]
-public static class RunManager_UpdateLevel_Patch
-{
-    private static void Postfix(RunManager __instance, string _levelName, int _levelsCompleted, bool _gameOver)
-    {
-        // This is called on all clients when the host changes level
-        if (_gameOver)
-        {
-            Plugin.Lives = Plugin.MaxLives;
-            Plugin.TotalDeaths = 0;
-            Plugin.Log.LogInfo($"Game over - Resetting lives to {Plugin.MaxLives} and deaths to 0");
-        }
-    }
-}
-
 [HarmonyPatch(typeof(RunManager), "Update")]
 public static class RunManager_Update_Patch
 {
@@ -112,24 +93,20 @@ public static class RunManager_Update_Patch
         
         if (allPlayersDead && !restarting)
         {
-            // Only increment deaths if we're the host
-            if (PhotonNetwork.IsMasterClient)
+            Plugin.TotalDeaths++;
+            Plugin.Lives--;
+            
+            Plugin.Log.LogInfo($"All players dead - TotalDeaths: {Plugin.TotalDeaths}, Lives remaining: {Plugin.Lives}");
+            
+            if (Plugin.Lives <= 0)
             {
-                Plugin.TotalDeaths++;
-                Plugin.Lives--;
-                
-                Plugin.Log.LogInfo($"All players dead - TotalDeaths: {Plugin.TotalDeaths}, Lives remaining: {Plugin.Lives}");
-                
-                if (Plugin.Lives <= 0)
-                {
-                    Plugin.Log.LogInfo("No lives remaining - Transitioning to arena");
-                    __instance.ChangeLevel(false, true, RunManager.ChangeLevelType.Normal);
-                }
-                else
-                {
-                    Plugin.Log.LogInfo($"Restarting level with {Plugin.Lives} lives remaining");
-                    __instance.ChangeLevel(false, false, RunManager.ChangeLevelType.Normal);
-                }
+                Plugin.Log.LogInfo("No lives remaining - Transitioning to arena");
+                __instance.ChangeLevel(false, true, RunManager.ChangeLevelType.Normal);
+            }
+            else
+            {
+                Plugin.Log.LogInfo($"Restarting level with {Plugin.Lives} lives remaining");
+                __instance.ChangeLevel(false, false, RunManager.ChangeLevelType.Normal);
             }
         }
     }
