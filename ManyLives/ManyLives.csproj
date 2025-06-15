@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net452</TargetFramework>
+        <TargetFramework>net480</TargetFramework>
         <AssemblyName>ManyLives</AssemblyName>
         <Product>live multiple lives</Product>
         <Version>1.0.0</Version>
