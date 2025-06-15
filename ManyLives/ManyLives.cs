@@ -17,7 +17,6 @@ public class Plugin : BaseUnityPlugin
     public static int TotalDeaths = 0;
     public static float HealthMultiplier = 1f;
     public static bool hasSetHealth = false;
-    public static int deadPlayers = 0;
 
     public void Awake()
     {
@@ -27,48 +26,6 @@ public class Plugin : BaseUnityPlugin
 
         var harmony = new Harmony("ManyLives");
         harmony.PatchAll();
-    }
-
-    public static void ResetDeadPlayers()
-    {
-        deadPlayers = 0;
-    }
-}
-
-[HarmonyPatch(typeof(PlayerAvatar), "PlayerDeathRPC")]
-public static class PlayerAvatar_PlayerDeathRPC_Patch
-{
-    private static void Postfix(PlayerAvatar __instance)
-    {
-        Plugin.deadPlayers++;
-        Plugin.Log.LogInfo($"Player died - Dead players: {Plugin.deadPlayers}, Total players: {PhotonNetwork.CurrentRoom?.PlayerCount ?? 1}");
-
-        // Check if all players are dead
-        if (Plugin.deadPlayers >= (PhotonNetwork.CurrentRoom?.PlayerCount ?? 1))
-        {
-            Plugin.TotalDeaths++;
-            Plugin.Lives--;
-            Plugin.Log.LogInfo($"All players dead - TotalDeaths: {Plugin.TotalDeaths}, Lives remaining: {Plugin.Lives}");
-
-            // Only host handles level changes
-            if (PhotonNetwork.IsMasterClient)
-            {
-                var runManager = GameObject.FindObjectOfType<RunManager>();
-                if (runManager != null)
-                {
-                    if (Plugin.Lives <= 0)
-                    {
-                        Plugin.Log.LogInfo("No lives remaining - Transitioning to arena");
-                        runManager.ChangeLevel(false, true, RunManager.ChangeLevelType.Normal);
-                    }
-                    else
-                    {
-                        Plugin.Log.LogInfo($"Restarting level with {Plugin.Lives} lives remaining");
-                        runManager.ChangeLevel(false, false, RunManager.ChangeLevelType.Normal);
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -127,8 +84,6 @@ public static class RunManager_ChangeLevel_Patch
             Plugin.Log.LogInfo($"Restarting level - Keeping lives at {Plugin.Lives} and deaths at {Plugin.TotalDeaths}");
             Plugin.hasSetHealth = false;
         }
-        // Reset dead players count on any level change
-        Plugin.ResetDeadPlayers();
     }
 }
 
@@ -144,7 +99,38 @@ public static class RunManager_UpdateLevel_Patch
             Plugin.TotalDeaths = 0;
             Plugin.Log.LogInfo($"Game over - Resetting lives to {Plugin.MaxLives} and deaths to 0");
         }
-        // Reset dead players count on any level update
-        Plugin.ResetDeadPlayers();
+    }
+}
+
+[HarmonyPatch(typeof(RunManager), "Update")]
+public static class RunManager_Update_Patch
+{
+    private static void Postfix(RunManager __instance)
+    {
+        var allPlayersDead = Traverse.Create(__instance).Field("allPlayersDead").GetValue<bool>();
+        var restarting = Traverse.Create(__instance).Field("restarting").GetValue<bool>();
+        
+        if (allPlayersDead && !restarting)
+        {
+            // Only increment deaths if we're the host
+            if (PhotonNetwork.IsMasterClient)
+            {
+                Plugin.TotalDeaths++;
+                Plugin.Lives--;
+                
+                Plugin.Log.LogInfo($"All players dead - TotalDeaths: {Plugin.TotalDeaths}, Lives remaining: {Plugin.Lives}");
+                
+                if (Plugin.Lives <= 0)
+                {
+                    Plugin.Log.LogInfo("No lives remaining - Transitioning to arena");
+                    __instance.ChangeLevel(false, true, RunManager.ChangeLevelType.Normal);
+                }
+                else
+                {
+                    Plugin.Log.LogInfo($"Restarting level with {Plugin.Lives} lives remaining");
+                    __instance.ChangeLevel(false, false, RunManager.ChangeLevelType.Normal);
+                }
+            }
+        }
     }
 } 
